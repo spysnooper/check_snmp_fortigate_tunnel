@@ -108,7 +108,7 @@ case "${NLINES}" in
     exit 2
     ;;
   1)
-    enpoints
+    endpoints
     OUTSTR="WARNING - There are some tunnel that fails to stablish connection to ${tun1}"
     echo -ne "${OUTSTR} |${OUTPERF}"
     exit 1
