@@ -1,7 +1,7 @@
 #!/bin/bash
 # check_snmp_fortigate_tunnel.sh
-# Version 1.0.4
-# Author: spysnooper
+# Version 1.0.6
+# Author: SpySnooper
 
 ##############################################################################
 # FUNCTIONS
@@ -26,9 +26,21 @@ endpoints() {
     ENDPOINTB=$(snmpwalk -On -v ${SNMP_VERSION} -c ${SNMP_COMUNITY} ${HOST} ${OID_FORTIGATE_TUNNEL_ENDPOINTB} | awk -F': ' '{print $2}')
 
     if [ "${ENDPOINTB}" == "${tun1}" ];then
-      OUTSTR="${OUTSTR}${ESTADO} - ${NOMBRE} - ${ENDPOINTA} <-> ${ENDPOINTB}\n"
+       if [ "${OUTSTR}" == "" ];then
+        OUTSTR="${ESTADO} - ${NOMBRE} - ${ENDPOINTA} <-> ${ENDPOINTB}"
+      else
+        OUTSTR="${OUTSTR}, ${ESTADO} - ${NOMBRE} - ${ENDPOINTA} <-> ${ENDPOINTB}"
+      fi
+
+      if [ "${OUTPERF}" == "" ];then
+        #OUTPERF="'${ENDPOINTA}<->${ENDPOINTB}'=${ESTADO};1;3;0"
+        OUTPERF="' ${ENDPOINTA}'=${ESTADO};1;3"
+      else
+        #OUTPERF="${OUTPERF}, '${ENDPOINTA}<->${ENDPOINTB}'=${ESTADO};1;3;0"
+        OUTPERF="${OUTPERF} '${ENDPOINTA}'=${ESTADO};1;3"
+      fi
     else
-      OUTSTR="UNKOWN - ${tun1} distinct of ${ENDPOINTB}, possibly some caracters are missing in -A arg\n${OUTSTR}"
+      OUTSTR="UNKOWN - ${tun1} distinct of ${ENDPOINTB}, possibly some caracters are missing in -A arg"
       echo -ne "${OUTSTR}"
       usage
       exit 3
@@ -52,6 +64,7 @@ OID_FORTIGATE_TUNNEL_LIST='.1.3.6.1.4.1.12356.101.12.2.2.1.4'
 ##############################################################################
 NLINES=0
 OUTSTR=""
+OUTPERF=""
 
 
 ##############################################################################
@@ -90,20 +103,20 @@ NLINES=$( snmpwalk -On -v ${SNMP_VERSION} -c ${SNMP_COMUNITY} ${HOST} ${OID_FORT
 
 case "${NLINES}" in
   0)
-    OUTSTR="CRITICAL - There are no tunnel stablished to ${tun1}\n${OUTSTR}"
-    echo -ne "${OUTSTR}\n"
+    OUTSTR="CRITICAL - There are no tunnel stablished to ${tun1}"
+    echo -ne "${OUTSTR} |${OUTPERF}"
     exit 2
     ;;
   1)
     enpoints
-    OUTSTR="WARNING - There are some tunnel that fails to stablish connection to ${tun1}\n${OUTSTR}"
-    echo -ne "${OUTSTR}"
+    OUTSTR="WARNING - There are some tunnel that fails to stablish connection to ${tun1}"
+    echo -ne "${OUTSTR} |${OUTPERF}"
     exit 1
     ;;
   *)
     endpoints
-    OUTSTR="OK - Unless there are ${NLINES} tunnels stablished to ${tun1}\n${OUTSTR}"
-    echo -ne "${OUTSTR}"
+    OUTSTR="OK - Unless there are ${NLINES} tunnels stablished to ${tun1}"
+    echo -ne "${OUTSTR} |${OUTPERF}"
     exit 0
     ;;
 esac
