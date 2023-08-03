@@ -11,41 +11,48 @@ usage() {
         exit 3;
 }
 endpoints() {
-  # Loop endpoints
-  for (( i=1; i<=${NLINES};i++ ))
-  do
+    TUNNEL_STATE=0
     # tunnel vars
-    OID_FORTIGATE_TUNNEL_NOMBRE=".1.3.6.1.4.1.12356.101.12.2.2.1.2.${i}.1"
-    OID_FORTIGATE_TUNNEL_ESTADO=".1.3.6.1.4.1.12356.101.12.2.2.1.20.${i}.1"
+    OID_FORTIGATE_TUNNEL_NAME=".1.3.6.1.4.1.12356.101.12.2.2.1.2.${i}.1"
+    OID_FORTIGATE_TUNNEL_STATE=".1.3.6.1.4.1.12356.101.12.2.2.1.20.${i}.1"
     OID_FORTIGATE_TUNNEL_ENDPOINTA=".1.3.6.1.4.1.12356.101.12.2.2.1.6.${i}.1"
     OID_FORTIGATE_TUNNEL_ENDPOINTB=".1.3.6.1.4.1.12356.101.12.2.2.1.4.${i}.1"
 
-    NOMBRE=$(snmpwalk -On -v ${SNMP_VERSION} -c ${SNMP_COMUNITY} ${HOST} ${OID_FORTIGATE_TUNNEL_NOMBRE} | awk -F': ' '{print $2}')
-    ESTADO=$(snmpwalk -On -v ${SNMP_VERSION} -c ${SNMP_COMUNITY} ${HOST} ${OID_FORTIGATE_TUNNEL_ESTADO} | awk -F': ' '{print $2}')
+    TUNNEL_NAME=$(snmpwalk -On -v ${SNMP_VERSION} -c ${SNMP_COMUNITY} ${HOST} ${OID_FORTIGATE_TUNNEL_NAME} | awk -F': ' '{print $2}')
+    TUNNEL_STATE=$(snmpwalk -On -v ${SNMP_VERSION} -c ${SNMP_COMUNITY} ${HOST} ${OID_FORTIGATE_TUNNEL_STATE} | awk -F': ' '{print $2}')
     ENDPOINTA=$(snmpwalk -On -v ${SNMP_VERSION} -c ${SNMP_COMUNITY} ${HOST} ${OID_FORTIGATE_TUNNEL_ENDPOINTA} | awk -F': ' '{print $2}')
     ENDPOINTB=$(snmpwalk -On -v ${SNMP_VERSION} -c ${SNMP_COMUNITY} ${HOST} ${OID_FORTIGATE_TUNNEL_ENDPOINTB} | awk -F': ' '{print $2}')
 
     if [ "${ENDPOINTB}" == "${tun1}" ];then
-       if [ "${OUTSTR}" == "" ];then
-        OUTSTR="${ESTADO} - ${NOMBRE} - ${ENDPOINTA} <-> ${ENDPOINTB}"
+      if [ "${OUTSTR}" == "" ];then
+        OUTSTR="${TUNNEL_STATE} - ${TUNNEL_NAME} - ${ENDPOINTA} <-> ${ENDPOINTB}"
       else
-        OUTSTR="${OUTSTR}, ${ESTADO} - ${NOMBRE} - ${ENDPOINTA} <-> ${ENDPOINTB}"
+        OUTSTR="${OUTSTR}, ${TUNNEL_STATE} - ${TUNNEL_NAME} - ${ENDPOINTA} <-> ${ENDPOINTB}"
       fi
 
       if [ "${OUTPERF}" == "" ];then
-        #OUTPERF="'${ENDPOINTA}<->${ENDPOINTB}'=${ESTADO};1;3;0"
-        OUTPERF="' ${ENDPOINTA}'=${ESTADO};1;3"
+        OUTPERF="'${TUNNEL_NAME}_${ENDPOINTA}_${ENDPOINTB}'=${TUNNEL_STATE};1;3"
       else
-        #OUTPERF="${OUTPERF}, '${ENDPOINTA}<->${ENDPOINTB}'=${ESTADO};1;3;0"
-        OUTPERF="${OUTPERF} '${ENDPOINTA}'=${ESTADO};1;3"
+        OUTPERF="${OUTPERF} '${TUNNEL_NAME}_${ENDPOINTA}_${ENDPOINTB}'=${TUNNEL_STATE};1;3"
       fi
+
+      case ${TUNNEL_STATE} in
+        1)
+          FINALSTATE=$(( ${FINALSTATE}+0 )) # sumar 0 cuando esta DOWN
+          ;;
+        2)
+          FINALSTATE=$(( ${FINALSTATE}+1 )) # sumar 1 cuando esta UP
+          ;;
+        *)
+          FINALSTATE=$(( ${FINALSTATE}+0 )) # sumar 0 en todos los casos menos en el 2
+          ;;
+      esac
     else
       OUTSTR="UNKOWN - ${tun1} distinct of ${ENDPOINTB}, possibly some caracters are missing in -A arg"
       echo -ne "${OUTSTR}"
       usage
       exit 3
     fi
-  done
 }
 
 ##############################################################################
@@ -65,9 +72,8 @@ OID_FORTIGATE_TUNNEL_LIST='.1.3.6.1.4.1.12356.101.12.2.2.1.4'
 NLINES=0
 OUTSTR=""
 OUTPERF=""
+FINALSTATE=0
 
-
-##############################################################################
 # MAIN
 ##############################################################################
 # Get Args
@@ -101,22 +107,26 @@ fi
 # Number of times that tun1 appears (= number of tunnels configured)
 NLINES=$( snmpwalk -On -v ${SNMP_VERSION} -c ${SNMP_COMUNITY} ${HOST} ${OID_FORTIGATE_TUNNEL_LIST} | grep ${tun1} | awk -F= '{print $1}' | cut -d. -f 15 | wc -l )
 
-case "${NLINES}" in
+for (( i=1; i<=${NLINES};i++ ))
+do
+  endpoints
+done
+
+case "${FINALSTATE}" in
   0)
     OUTSTR="CRITICAL - There are no tunnel stablished to ${tun1}"
-    echo -ne "${OUTSTR} |${OUTPERF}"
+    echo -ne "${OUTSTR} | ${OUTPERF}"
     exit 2
     ;;
   1)
-    endpoints
     OUTSTR="WARNING - There are some tunnel that fails to stablish connection to ${tun1}"
-    echo -ne "${OUTSTR} |${OUTPERF}"
+    echo -ne "${OUTSTR} | ${OUTPERF}"
     exit 1
     ;;
-  *)
-    endpoints
+  [2-99]*)
+    # mas de 1 tunnel con estado=2 (UP)
     OUTSTR="OK - Unless there are ${NLINES} tunnels stablished to ${tun1}"
-    echo -ne "${OUTSTR} |${OUTPERF}"
+    echo -ne "${OUTSTR} | ${OUTPERF}"
     exit 0
     ;;
 esac
