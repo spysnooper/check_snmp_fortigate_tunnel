@@ -44,7 +44,7 @@ endpoints() {
           FINALSTATE=$(( ${FINALSTATE}+0 )) # sum 0 when STATE not equal 2
           ;;
       esac
-      
+
     else
       OUTSTR="UNKOWN - ${tun1} distinct of ${ENDPOINTB}, possibly some caracters are missing in -A arg"
       echo -ne "${OUTSTR}"
