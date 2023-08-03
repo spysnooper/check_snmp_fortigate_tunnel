@@ -1,6 +1,6 @@
 #!/bin/bash
 # check_snmp_fortigate_tunnel.sh
-# Version 1.0.6
+# Version 1.0.7
 # Author: SpySnooper
 
 ##############################################################################
@@ -18,7 +18,7 @@ endpoints() {
     OID_FORTIGATE_TUNNEL_ENDPOINTA=".1.3.6.1.4.1.12356.101.12.2.2.1.6.${i}.1"
     OID_FORTIGATE_TUNNEL_ENDPOINTB=".1.3.6.1.4.1.12356.101.12.2.2.1.4.${i}.1"
 
-    TUNNEL_NAME=$(snmpwalk -On -v ${SNMP_VERSION} -c ${SNMP_COMUNITY} ${HOST} ${OID_FORTIGATE_TUNNEL_NAME} | awk -F': ' '{print $2}')
+    TUNNEL_NAME=$(snmpwalk -On -v ${SNMP_VERSION} -c ${SNMP_COMUNITY} ${HOST} ${OID_FORTIGATE_TUNNEL_NAME} | awk -F': ' '{print $2}'| cut -d\" -f2)
     TUNNEL_STATE=$(snmpwalk -On -v ${SNMP_VERSION} -c ${SNMP_COMUNITY} ${HOST} ${OID_FORTIGATE_TUNNEL_STATE} | awk -F': ' '{print $2}')
     ENDPOINTA=$(snmpwalk -On -v ${SNMP_VERSION} -c ${SNMP_COMUNITY} ${HOST} ${OID_FORTIGATE_TUNNEL_ENDPOINTA} | awk -F': ' '{print $2}')
     ENDPOINTB=$(snmpwalk -On -v ${SNMP_VERSION} -c ${SNMP_COMUNITY} ${HOST} ${OID_FORTIGATE_TUNNEL_ENDPOINTB} | awk -F': ' '{print $2}')
@@ -31,22 +31,20 @@ endpoints() {
       fi
 
       if [ "${OUTPERF}" == "" ];then
-        OUTPERF="'${TUNNEL_NAME}_${ENDPOINTA}_${ENDPOINTB}'=${TUNNEL_STATE};1;3"
+        OUTPERF="'${TUNNEL_NAME} (${ENDPOINTA} <-> ${ENDPOINTB})'=${TUNNEL_STATE};1;3"
       else
-        OUTPERF="${OUTPERF} '${TUNNEL_NAME}_${ENDPOINTA}_${ENDPOINTB}'=${TUNNEL_STATE};1;3"
+        OUTPERF="${OUTPERF} '${TUNNEL_NAME} (${ENDPOINTA} <-> ${ENDPOINTB})'=${TUNNEL_STATE};1;3"
       fi
 
       case ${TUNNEL_STATE} in
-        1)
-          FINALSTATE=$(( ${FINALSTATE}+0 )) # sumar 0 cuando esta DOWN
-          ;;
         2)
-          FINALSTATE=$(( ${FINALSTATE}+1 )) # sumar 1 cuando esta UP
+          FINALSTATE=$(( ${FINALSTATE}+1 )) # sum 1 when is UP
           ;;
         *)
-          FINALSTATE=$(( ${FINALSTATE}+0 )) # sumar 0 en todos los casos menos en el 2
+          FINALSTATE=$(( ${FINALSTATE}+0 )) # sum 0 when STATE not equal 2
           ;;
       esac
+      
     else
       OUTSTR="UNKOWN - ${tun1} distinct of ${ENDPOINTB}, possibly some caracters are missing in -A arg"
       echo -ne "${OUTSTR}"
@@ -99,15 +97,15 @@ while getopts ":H:C:A:" OPTION; do
     esac
 done
 
-# Test that needed args are present
+# ENsure needed args are present
 if [ -z "${HOST}" ] || [ -z "${SNMP_COMUNITY}" ] || [ -z "${tun1}" ]; then
     usage
 fi
 
 # Number of times that tun1 appears (= number of tunnels configured)
-NLINES=$( snmpwalk -On -v ${SNMP_VERSION} -c ${SNMP_COMUNITY} ${HOST} ${OID_FORTIGATE_TUNNEL_LIST} | grep ${tun1} | awk -F= '{print $1}' | cut -d. -f 15 | wc -l )
+NTUNNELS=$( snmpwalk -On -v ${SNMP_VERSION} -c ${SNMP_COMUNITY} ${HOST} ${OID_FORTIGATE_TUNNEL_LIST} | grep ${tun1} | awk -F= '{print $1}' | cut -d. -f 15 | wc -l )
 
-for (( i=1; i<=${NLINES};i++ ))
+for (( i=1; i<=${NTUNNELS};i++ ))
 do
   endpoints
 done
@@ -125,7 +123,7 @@ case "${FINALSTATE}" in
     ;;
   [2-99]*)
     # mas de 1 tunnel con estado=2 (UP)
-    OUTSTR="OK - Unless there are ${NLINES} tunnels stablished to ${tun1}"
+    OUTSTR="OK - At least ${NTUNNELS} tunnels stablished to ${tun1}"
     echo -ne "${OUTSTR} | ${OUTPERF}"
     exit 0
     ;;
