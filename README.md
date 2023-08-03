@@ -15,5 +15,7 @@ sudo chown -c root:root /usr/lib64/nagios/plugins/check_snmp_fortigate_tunnel.sh
 
 # Arguments explained
 <hostaddress> is Fortigate you want to query by SNMP
+
 <snmp_community_string> the SNMP community you have configured in the Fortigate
+
 <main_tunnel_ipv4_pub_address> the IP of the Endpoint/Gateway VPN that you want to be connected from Fortigate HOST
